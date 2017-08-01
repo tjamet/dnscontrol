@@ -34,18 +34,22 @@ func (c *challengeProvider) CleanUp(domain, token, keyAuth string) error {
 // map of certname -> list of names to include
 func (c *challengeProvider) GetCertificates() map[string][]string {
 	// domain metadata:
-	// cert:name (default: $domain)   // san cert group
-	// cert:explicit (default: false) // require records to ask to be generated with san_name / include
-	// cert:nosan                     // generate a cert per name
+	// cert:name (default: $domain)    // san cert group
+	// cert:explicit (default: false)  // require records to ask to be generated with san_name / include
+	// cert:nosan                      // generate a cert per name
+	// cert:subjects                   // manually specify names to include (comma seperated). This will matter more as wildcards are supported. (do we require names to all be in the zone?)
+	// cert:wildcards (default: false) // not supported yet, but should plan for it. Can switch default later.
 
 	// record metadata:
 	// cert:name (default: domain's san)
 	// cert:include // override explicit_only, using domain's san
 	// cert:single  // don't include in domain, make specific cert for this record. Sugar for {"cert:name":"$fqdn"}
+	// cert:subject // subject to use
 
 	// global flags (cli likely)
-	// implicit (default: false) // generate certs for domains without cert: metadata
-	// explicit_default          // add cert:explicit to all domains
+	// implicit (default: false) // generate certs for domains without cert:* metadata
+	// explicit                  // add cert:explicit:true to all domains
+	// wildcards                 // add cert:wildcards:true to all domains
 	return map[string][]string{
 		"stackoverflow.com": []string{"captncraig.io", "foo.captncraig.io"},
 	}
