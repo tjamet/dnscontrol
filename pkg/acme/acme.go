@@ -25,6 +25,7 @@ type CertValidator interface {
 
 func (c *challengeProvider) Present(domain, token, keyAuth string) error {
 	fmt.Println("PRESENT!!!!", domain, token, keyAuth)
+
 	// for all appropriate providers on domain, add TXT record.
 	return nil
 }
