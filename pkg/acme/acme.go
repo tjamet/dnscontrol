@@ -6,6 +6,7 @@ import (
 	"crypto/rsa"
 	"fmt"
 	"log"
+	"sort"
 
 	"github.com/StackExchange/dnscontrol/models"
 	"github.com/StackExchange/dnscontrol/providers"
@@ -31,28 +32,45 @@ func (c *challengeProvider) CleanUp(domain, token, keyAuth string) error {
 	return nil
 }
 
+const (
+	// san certificate name to use for
+	metaSanName = "cert:certName"
+)
+
 // map of certname -> list of names to include
 func (c *challengeProvider) GetCertificates() map[string][]string {
-	// domain metadata:
-	// cert:name (default: $domain)    // san cert group
-	// cert:explicit (default: false)  // require records to ask to be generated with san_name / include
-	// cert:nosan                      // generate a cert per name
-	// cert:subjects                   // manually specify names to include (comma seperated). This will matter more as wildcards are supported. (do we require names to all be in the zone?)
-	// cert:wildcards (default: false) // not supported yet, but should plan for it. Can switch default later.
-
-	// record metadata:
-	// cert:name (default: domain's san)
-	// cert:include // override explicit_only, using domain's san
-	// cert:single  // don't include in domain, make specific cert for this record. Sugar for {"cert:name":"$fqdn"}
-	// cert:subject // subject to use
-
-	// global flags (cli likely)
-	// implicit (default: false) // generate certs for domains without cert:* metadata
-	// explicit                  // add cert:explicit:true to all domains
-	// wildcards                 // add cert:wildcards:true to all domains
-	return map[string][]string{
-		"stackoverflow.com": []string{"captncraig.io", "foo.captncraig.io"},
+	certs := map[string]map[string]bool{}
+	add := func(cert, name string) {
+		if certs[cert] == nil {
+			certs[cert] = map[string]bool{}
+		}
+		certs[cert][name] = true
 	}
+	for _, d := range c.cfg.Domains {
+		dName := d.Name
+		if sName := d.Metadata[metaSanName]; sName != "" {
+			dName = sName
+		}
+		for _, r := range d.Records {
+			certName := dName
+			if rName := r.Metadata[metaSanName]; rName != "" {
+				certName = rName
+			}
+			if certName == "-" {
+				continue
+			}
+			add(certName, r.NameFQDN)
+		}
+	}
+	// now convert to proper map for return
+	out := map[string][]string{}
+	for name, m := range certs {
+		for k := range m {
+			out[name] = append(out[name], k)
+		}
+		sort.Strings(out[name])
+	}
+	return out
 }
 
 func IssueCerts(cfg *models.DNSConfig, providers map[string]providers.DNSServiceProvider) error {
