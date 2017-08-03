@@ -19,6 +19,8 @@ type challengeProvider struct {
 }
 
 type CertValidator interface {
+	CreateACMETXTRecord(name, content string) error
+	RemoveACMETXTRecords() error
 }
 
 func (c *challengeProvider) Present(domain, token, keyAuth string) error {
@@ -33,7 +35,7 @@ func (c *challengeProvider) CleanUp(domain, token, keyAuth string) error {
 }
 
 const (
-	// san certificate name to use for
+	// san certificate name to use for domain or record certificate. "cert:certName":"-" will not generate cert for name.
 	metaSanName = "cert:certName"
 )
 
@@ -74,36 +76,40 @@ func (c *challengeProvider) GetCertificates() map[string][]string {
 }
 
 func IssueCerts(cfg *models.DNSConfig, providers map[string]providers.DNSServiceProvider) error {
-
 	challenge := &challengeProvider{cfg: cfg, providers: providers}
-	log.Println(challenge)
+	// TODO: validate provider compatibility
 
-	privateKey, err := rsa.GenerateKey(rand.Reader, 2048)
+	//TODO: load from disk
+	u, err := loadUser()
 	if err != nil {
-		log.Fatal(err)
+		return err
 	}
-	//LOAD
-	myUser := &MyUser{
-		Email: "you@yours.com",
-		key:   privateKey,
+	if u == nil {
+		privateKey, err := rsa.GenerateKey(rand.Reader, 2048)
+		if err != nil {
+			log.Fatal(err)
+		}
+		u := &user{
+			Email: "you@yours.com",
+			key:   privateKey,
+		}
 	}
 
-	client, err := acme.NewClient("https://acme-v01.api.letsencrypt.org/directory", myUser, acme.RSA2048)
-	log.Println(client)
+	client, err := acme.NewClient("https://acme-v01.api.letsencrypt.org/directory", u, acme.RSA2048)
 	if err != nil {
-		log.Fatal(err)
+		return err
 	}
 	client.SetChallengeProvider(acme.DNS01, challenge)
 	client.ExcludeChallenges([]acme.Challenge{acme.HTTP01, acme.TLSSNI01})
 
-	if myUser.Registration == nil {
+	if u.Registration == nil {
 		reg, err := client.Register()
 		if err != nil {
-			log.Fatal(err)
+			return err
 		}
-		myUser.Registration = reg
-		log.Println("REG", myUser.Registration)
-		// SAVE
+		u.Registration = reg
+		log.Println("REG", u.Registration)
+		//TODO: save to disk
 	}
 
 	err = client.AgreeToTOS()
@@ -120,18 +126,22 @@ func IssueCerts(cfg *models.DNSConfig, providers map[string]providers.DNSService
 	return nil
 }
 
-type MyUser struct {
+func loadUser() (*user, error) {
+	return nil, nil
+}
+
+type user struct {
 	Email        string
 	Registration *acme.RegistrationResource
 	key          crypto.PrivateKey
 }
 
-func (u *MyUser) GetEmail() string {
+func (u *user) GetEmail() string {
 	return u.Email
 }
-func (u *MyUser) GetRegistration() *acme.RegistrationResource {
+func (u *user) GetRegistration() *acme.RegistrationResource {
 	return u.Registration
 }
-func (u *MyUser) GetPrivateKey() crypto.PrivateKey {
+func (u *user) GetPrivateKey() crypto.PrivateKey {
 	return u.key
 }
