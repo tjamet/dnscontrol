@@ -49,11 +49,14 @@ func checkTarget(target string) error {
 
 // validateRecordTypes list of valid rec.Type values. Returns true if this is a real DNS record type, false means it is a pseudo-type used internally.
 func validateRecordTypes(rec *models.RecordConfig, domain string, pTypes []string) error {
+	//(#rtype_variations)
 	var validTypes = map[string]bool{
 		"A":                true,
 		"AAAA":             true,
-		"CNAME":            true,
 		"CAA":              true,
+		"CF_REDIRECT":      false,
+		"CF_TEMP_REDIRECT": false,
+		"CNAME":            true,
 		"IMPORT_TRANSFORM": false,
 		"MX":               true,
 		"SRV":              true,
@@ -62,22 +65,10 @@ func validateRecordTypes(rec *models.RecordConfig, domain string, pTypes []strin
 		"PTR":              true,
 		"ALIAS":            false,
 	}
+
 	_, ok := validTypes[rec.Type]
 	if !ok {
-		cType := providers.GetCustomRecordType(rec.Type)
-		if cType == nil {
-			return fmt.Errorf("Unsupported record type (%v) domain=%v name=%v", rec.Type, domain, rec.Name)
-		}
-		for _, providerType := range pTypes {
-			if providerType != cType.Provider {
-				return fmt.Errorf("Custom record type %s is not compatible with provider type %s", rec.Type, providerType)
-			}
-		}
-		//it is ok. Lets replace the type with real type and add metadata to say we checked it
-		rec.Metadata["orig_custom_type"] = rec.Type
-		if cType.RealType != "" {
-			rec.Type = cType.RealType
-		}
+		return fmt.Errorf("Unsupported record type (%v) domain=%v name=%v", rec.Type, domain, rec.Name)
 	}
 	return nil
 }
@@ -360,19 +351,10 @@ func checkCNAMEs(dc *models.DomainConfig) (errs []error) {
 }
 
 func checkProviderCapabilities(dc *models.DomainConfig, pList []*models.DNSProviderConfig) error {
-	types := []struct {
-		rType string
-		cap   providers.Capability
-	}{
-		{"ALIAS", providers.CanUseAlias},
-		{"PTR", providers.CanUsePTR},
-		{"SRV", providers.CanUseSRV},
-		{"CAA", providers.CanUseCAA},
-	}
-	for _, ty := range types {
+	for rType, cap := range providers.RestrictedRecordTypes {
 		hasAny := false
 		for _, r := range dc.Records {
-			if r.Type == ty.rType {
+			if r.Type == rType {
 				hasAny = true
 				break
 			}
@@ -383,8 +365,8 @@ func checkProviderCapabilities(dc *models.DomainConfig, pList []*models.DNSProvi
 		for pName := range dc.DNSProviders {
 			for _, p := range pList {
 				if p.Name == pName {
-					if !providers.ProviderHasCabability(p.Type, ty.cap) {
-						return fmt.Errorf("Domain %s uses %s records, but DNS provider type %s does not support them", dc.Name, ty.rType, p.Type)
+					if !providers.ProviderHasCabability(p.Type, cap) {
+						return fmt.Errorf("Domain %s uses %s records, but DNS provider type %s does not support them", dc.Name, rType, p.Type)
 					}
 					break
 				}

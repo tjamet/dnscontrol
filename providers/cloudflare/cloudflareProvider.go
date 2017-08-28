@@ -34,9 +34,7 @@ Domain level metadata available:
 */
 
 func init() {
-	providers.RegisterDomainServiceProviderType("CLOUDFLAREAPI", newCloudflare, providers.CanUseSRV, providers.CanUseAlias)
-	providers.RegisterCustomRecordType("CF_REDIRECT", "CLOUDFLAREAPI", "")
-	providers.RegisterCustomRecordType("CF_TEMP_REDIRECT", "CLOUDFLAREAPI", "")
+	providers.RegisterDomainServiceProviderType("CLOUDFLAREAPI", newCloudflare, providers.CanUseSRV, providers.CanUseAlias, providers.CanDoCloudflareRedirects)
 }
 
 type CloudflareApi struct {
@@ -50,7 +48,6 @@ type CloudflareApi struct {
 }
 
 func labelMatches(label string, matches []string) bool {
-	//log.Printf("DEBUG: labelMatches(%#v, %#v)\n", label, matches)
 	for _, tst := range matches {
 		if label == tst {
 			return true

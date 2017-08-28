@@ -34,31 +34,6 @@ var registrarTypes = map[string]RegistrarInitializer{}
 type DspInitializer func(map[string]string, json.RawMessage) (DNSServiceProvider, error)
 
 var dspTypes = map[string]DspInitializer{}
-var dspCapabilities = map[string]Capability{}
-
-//Capability is a bitmasked set of "features" that a provider supports. Only use constants from this package.
-type Capability uint32
-
-const (
-	// CanUseAlias indicates the provider support ALIAS records (or flattened CNAMES). Up to the provider to translate them to the appropriate record type.
-	// If you add something to this list, you probably want to add it to pkg/normalize/validate.go checkProviderCapabilities() or somewhere near there.
-	CanUseAlias Capability = 1 << iota
-	// CanUsePTR indicates the provider can handle PTR records
-	CanUsePTR
-	// CanUseSRV indicates the provider can handle SRV records
-	CanUseSRV
-	// CanUseCAA indicates the provider can handle CAA records
-	CanUseCAA
-	// CantUseNOPURGE indicates NO_PURGE is broken for this provider. To make it
-	// work would require complex emulation of an incremental update mechanism,
-	// so it is easier to simply mark this feature as not working for this
-	// provider.
-	CantUseNOPURGE
-)
-
-func ProviderHasCabability(pType string, cap Capability) bool {
-	return dspCapabilities[pType]&cap != 0
-}
 
 //RegisterRegistrarType adds a registrar type to the registry by providing a suitable initialization function.
 func RegisterRegistrarType(name string, init RegistrarInitializer) {
@@ -69,16 +44,14 @@ func RegisterRegistrarType(name string, init RegistrarInitializer) {
 }
 
 //RegisterDomainServiceProviderType adds a dsp to the registry with the given initialization function.
-func RegisterDomainServiceProviderType(name string, init DspInitializer, caps ...Capability) {
+func RegisterDomainServiceProviderType(name string, init DspInitializer, caps ...CapabilityOption) {
 	if _, ok := dspTypes[name]; ok {
 		log.Fatalf("Cannot register registrar type %s multiple times", name)
 	}
-	var abilities Capability
 	for _, c := range caps {
-		abilities |= c
+		providerCapabilities[name] = append(providerCapabilities[name], c.Get())
 	}
 	dspTypes[name] = init
-	dspCapabilities[name] = abilities
 }
 
 func createRegistrar(rType string, config map[string]string) (Registrar, error) {
@@ -148,24 +121,3 @@ func init() {
 		return None{}, nil
 	})
 }
-
-type CustomRType struct {
-	Name     string
-	Provider string
-	RealType string
-}
-
-// RegisterCustomRecordType registers a record type that is only valid for one provider.
-// provider is the registered type of provider this is valid with
-// name is the record type as it will appear in the js. (should be something like $PROVIDER_FOO)
-// realType is the record type it will be replaced with after validation
-func RegisterCustomRecordType(name, provider, realType string) {
-	customRecordTypes[name] = &CustomRType{Name: name, Provider: provider, RealType: realType}
-}
-
-// GetCustomRecordType returns a registered custom record type, or nil if none
-func GetCustomRecordType(rType string) *CustomRType {
-	return customRecordTypes[rType]
-}
-
-var customRecordTypes = map[string]*CustomRType{}
