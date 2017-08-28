@@ -3,6 +3,7 @@ package providers
 //CapabilityFlag is an identifier for a "feature" that a provider supports. Only use constants from this package.
 type CapabilityFlag uint32
 
+// Add all capabilies to this list. Even ones just for documentation are ok.
 const (
 	// CanUseAlias indicates the provider support ALIAS records (or flattened CNAMES). Up to the provider to translate them to the appropriate record type.
 	// If you add something to this list, you probably want to add it to pkg/normalize/validate.go checkProviderCapabilities() or somewhere near there.
@@ -20,6 +21,12 @@ const (
 	CantUseNOPURGE
 	// CanDoCloudflareRedirects is really only supported by cloudflare
 	CanDoCloudflareRedirects
+
+	// CanDualHost indicates the provider is fully capable of acting in a dual-host setup. Includes full control of apex NS records. DOCUMENTATION ONLY.
+	CanDualHost
+
+	// AllCapabilities is a special value that indicates this provider can do everything. Any provider declaring this should expect and handle unexpected record types cleanly.
+	AllCapabilities // KEEP AT END OF LIST!
 )
 
 // RestrictedRecordTypes tracks record types that require special capabilities in order to be valid.
@@ -44,6 +51,9 @@ var providerCapabilities = map[string][]Capability{}
 
 func ProviderHasCabability(pType string, cap CapabilityFlag) bool {
 	for _, c := range providerCapabilities[pType] {
+		if c.Flag == AllCapabilities && c.Enabled {
+			return true
+		}
 		if c.Flag == cap && c.Enabled {
 			return true
 		}
