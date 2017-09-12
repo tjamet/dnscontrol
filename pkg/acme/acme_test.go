@@ -41,6 +41,8 @@ func TestGetCerts(t *testing.T) {
 		})
 	}
 
+	// each test transforms the base domain set, then tells what certs it expects to see.
+
 	tst("simple", nil, map[string][]string{
 		"a.com": []string{"a.com", "foo.a.com"},
 		"b.com": []string{"b.com", "foo.b.com"},
@@ -82,7 +84,7 @@ func TestGetCerts(t *testing.T) {
 		"b.com": []string{"b.com", "foo.b.com"},
 	})
 
-	tst("ignore domain", func() {
+	tst("ignore domain, still make single record", func() {
 		d1.Metadata[metaSanName] = "-"
 		d1.Records[0].Metadata[metaSanName] = "a"
 	}, map[string][]string{
@@ -91,20 +93,3 @@ func TestGetCerts(t *testing.T) {
 	})
 
 }
-
-//Possible metadata
-// domain metadata:
-// cert:explicit (default: false)  // require records to ask to be generated with san_name / include
-// cert:nosan                      // generate a cert per name
-// cert:subjects                   // manually specify names to include (comma seperated). This will matter more as wildcards are supported. (do we require names to all be in the zone?)
-// cert:wildcards (default: false) // not supported yet, but should plan for it. Can switch default later.
-
-// record metadata:
-// cert:include // override explicit_only, using domain's san
-// cert:single  // don't include in domain, make specific cert for this record. Sugar for {"cert:name":"$fqdn"}
-// cert:subject // subject to use
-
-// global flags (cli likely)
-// implicit (default: false) // generate certs for domains without cert:* metadata
-// explicit                  // add cert:explicit:true to all domains
-// wildcards                 // add cert:wildcards:true to all domains

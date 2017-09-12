@@ -4,6 +4,7 @@ import (
 	"crypto"
 	"crypto/rand"
 	"crypto/rsa"
+	"encoding/json"
 	"fmt"
 	"log"
 	"sort"
@@ -25,8 +26,8 @@ type CertValidator interface {
 
 func (c *challengeProvider) Present(domain, token, keyAuth string) error {
 	fmt.Println("PRESENT!!!!", domain, token, keyAuth)
-
-	// for all appropriate providers on domain, add TXT record.
+	fqdn, value, _ := acme.DNS01Record(domain, keyAuth)
+	fmt.Println(fqdn, value)
 	return nil
 }
 func (c *challengeProvider) CleanUp(domain, token, keyAuth string) error {
@@ -40,8 +41,18 @@ const (
 	metaSanName = "cert:certName"
 )
 
+// r types we infer we want certs from by default
+var autoRecordTypes = map[string]bool{
+	"A":     true,
+	"AAAA":  true,
+	"CNAME": true,
+	"MX":    true,
+	"ALIAS": true,
+}
+
 // map of certname -> list of names to include
 func (c *challengeProvider) GetCertificates() map[string][]string {
+	// certname to lookup of included sans
 	certs := map[string]map[string]bool{}
 	add := func(cert, name string) {
 		if certs[cert] == nil {
@@ -58,6 +69,9 @@ func (c *challengeProvider) GetCertificates() map[string][]string {
 			certName := dName
 			if rName := r.Metadata[metaSanName]; rName != "" {
 				certName = rName
+			} else if !autoRecordTypes[r.Type] {
+				// not explicitly stated, not an automatic record type
+				continue
 			}
 			if certName == "-" {
 				continue
@@ -90,7 +104,7 @@ func IssueCerts(cfg *models.DNSConfig, providers map[string]providers.DNSService
 		if err != nil {
 			log.Fatal(err)
 		}
-		u := &user{
+		u = &user{
 			Email: "you@yours.com",
 			key:   privateKey,
 		}
@@ -111,6 +125,8 @@ func IssueCerts(cfg *models.DNSConfig, providers map[string]providers.DNSService
 		u.Registration = reg
 		log.Println("REG", u.Registration)
 		//TODO: save to disk
+		j, _ := json.Marshal(u)
+		fmt.Println(string(j))
 	}
 
 	err = client.AgreeToTOS()
