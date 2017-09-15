@@ -73,11 +73,6 @@ func (c *CloudflareApi) GetNameservers(domain string) ([]*models.Nameserver, err
 }
 
 func (c *CloudflareApi) GetDomainCorrections(dc *models.DomainConfig) ([]*models.Correction, error) {
-	if c.domainIndex == nil {
-		if err := c.fetchDomainList(); err != nil {
-			return nil, err
-		}
-	}
 	id, ok := c.domainIndex[dc.Name]
 	if !ok {
 		return nil, fmt.Errorf("%s not listed in zones for cloudflare account", dc.Name)
@@ -394,4 +389,29 @@ func (c *CloudflareApi) EnsureDomainExists(domain string) error {
 	id, err := c.createZone(domain)
 	fmt.Printf("Added zone for %s to Cloudflare account: %s\n", domain, id)
 	return err
+}
+
+func (c *CloudflareApi) CreateACMETXTRecord(domain, name, content string) error {
+	id, ok := c.domainIndex[domain]
+	if !ok {
+		return fmt.Errorf("%s not listed in zones for cloudflare account", domain)
+	}
+	corrs := c.createRec(&models.RecordConfig{
+		Type:     "TXT",
+		Name:     name,
+		Target:   content,
+		TTL:      1,
+		Metadata: map[string]string{metaProxy: "off"},
+	}, id)
+	for _, c := range corrs {
+		log.Println(c)
+		if err := c.F(); err != nil {
+			return err
+		}
+	}
+	return nil
+}
+func (c *CloudflareApi) RemoveACMETXTRecords(domain string) error {
+
+	return nil
 }

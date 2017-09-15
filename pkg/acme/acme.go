@@ -6,8 +6,14 @@ import (
 	"crypto/rsa"
 	"encoding/json"
 	"fmt"
+	"io/ioutil"
 	"log"
+	"os"
+	"path/filepath"
 	"sort"
+	"strings"
+
+	"github.com/miekg/dns/dnsutil"
 
 	"github.com/StackExchange/dnscontrol/models"
 	"github.com/StackExchange/dnscontrol/providers"
@@ -20,25 +26,70 @@ type challengeProvider struct {
 }
 
 type CertValidator interface {
-	CreateACMETXTRecord(name, content string) error
-	RemoveACMETXTRecords() error
+	CreateACMETXTRecord(domain, name, content string) error
+	RemoveACMETXTRecords(domain string) error
+}
+
+func (c *challengeProvider) getValidators(domain string) (name string, validators []CertValidator, err error) {
+	// we have a domain name. It may or may not have extra subdomains.
+	// find longest domain which is our suffix
+	var dom *models.DomainConfig
+	for _, d := range c.cfg.Domains {
+		if strings.HasSuffix(domain, d.Name) {
+			if dom == nil || len(dom.Name) < len(d.Name) {
+				dom = d
+			}
+		}
+	}
+	if dom == nil {
+		return "", nil, fmt.Errorf("Domain %s not found", domain)
+	}
+	for pName := range dom.DNSProviders {
+		var p providers.DNSServiceProvider
+		var ok bool
+		var validator CertValidator
+		if p, ok = c.providers[pName]; !ok {
+			return "", nil, fmt.Errorf("Provider %s not found", pName)
+		}
+		if validator, ok = p.(CertValidator); !ok {
+			return "", nil, fmt.Errorf("Provider %s does not implement ACME provider", pName)
+		}
+		validators = append(validators, validator)
+	}
+	return dom.Name, validators, nil
 }
 
 func (c *challengeProvider) Present(domain, token, keyAuth string) error {
-	fmt.Println("PRESENT!!!!", domain, token, keyAuth)
+	// find the domain
+	name, validators, err := c.getValidators(domain)
+	if err != nil {
+		return err
+	}
 	fqdn, value, _ := acme.DNS01Record(domain, keyAuth)
-	fmt.Println(fqdn, value)
+	for _, v := range validators {
+		if err := v.CreateACMETXTRecord(name, dnsutil.TrimDomainName(fqdn, name), value); err != nil {
+			return err
+		}
+	}
 	return nil
 }
+
 func (c *challengeProvider) CleanUp(domain, token, keyAuth string) error {
-	fmt.Println("CLEAN!!!!", domain, token, keyAuth)
-	// for all appropriate providers on domain, remove all LE TXT records.
+	name, validators, err := c.getValidators(domain)
+	if err != nil {
+		return err
+	}
+	for _, v := range validators {
+		if err := v.RemoveACMETXTRecords(name); err != nil {
+			return err
+		}
+	}
 	return nil
 }
 
 const (
-	// san certificate name to use for domain or record certificate. "cert:certName":"-" will not generate cert for name.
-	metaSanName = "cert:certName"
+	// san certificate name to use for domain or record certificate. "certName":"-" will not generate cert for name.
+	metaSanName = "certName"
 )
 
 // r types we infer we want certs from by default
@@ -92,9 +143,10 @@ func (c *challengeProvider) GetCertificates() map[string][]string {
 
 func IssueCerts(cfg *models.DNSConfig, providers map[string]providers.DNSServiceProvider) error {
 	challenge := &challengeProvider{cfg: cfg, providers: providers}
-	// TODO: validate provider compatibility
+	// TODO: validate provider compatibility up front
 
-	//TODO: load from disk
+	os.MkdirAll("certs", 0600)
+
 	u, err := loadUser()
 	if err != nil {
 		return err
@@ -106,11 +158,11 @@ func IssueCerts(cfg *models.DNSConfig, providers map[string]providers.DNSService
 		}
 		u = &user{
 			Email: "you@yours.com",
-			key:   privateKey,
+			Key:   privateKey,
 		}
 	}
 
-	client, err := acme.NewClient("https://acme-v01.api.letsencrypt.org/directory", u, acme.RSA2048)
+	client, err := acme.NewClient("https://acme-staging.api.letsencrypt.org/directory", u, acme.RSA2048)
 	if err != nil {
 		return err
 	}
@@ -123,13 +175,8 @@ func IssueCerts(cfg *models.DNSConfig, providers map[string]providers.DNSService
 			return err
 		}
 		u.Registration = reg
-		log.Println("REG", u.Registration)
-		//TODO: save to disk
-<<<<<<< HEAD
 		j, _ := json.Marshal(u)
-		fmt.Println(string(j))
-=======
->>>>>>> e47866212d77e41c80f39fea14f08c14c3ec47a4
+		ioutil.WriteFile(filepath.Join("certs", "user.json"), j, 0600)
 	}
 
 	err = client.AgreeToTOS()
@@ -141,19 +188,38 @@ func IssueCerts(cfg *models.DNSConfig, providers map[string]providers.DNSService
 		// Find existing and renew if needed. Otherwise re-issue
 		log.Println(name, names)
 		cert, errs := client.ObtainCertificate(names, true, nil, false)
-		log.Println(cert, errs)
+		if len(errs) > 0 {
+			for _, err := range errs {
+				log.Println(err)
+			}
+		}
+		ioutil.WriteFile(filepath.Join("certs", fmt.Sprintf("%s.cert", name)), cert.Certificate, 0600)
+		ioutil.WriteFile(filepath.Join("certs", fmt.Sprintf("%s.key", name)), cert.PrivateKey, 0600)
+		ioutil.WriteFile(filepath.Join("certs", fmt.Sprintf("%s.issuer.cert", name)), cert.IssuerCertificate, 0600)
 	}
 	return nil
 }
 
 func loadUser() (*user, error) {
-	return nil, nil
+	dat, err := ioutil.ReadFile(filepath.Join("certs", "user.json"))
+	if err != nil {
+		if os.IsNotExist(err) {
+			return nil, nil
+		}
+		return nil, err
+	}
+	u := &user{}
+	err = json.Unmarshal(dat, u)
+	if err != nil {
+		return nil, err
+	}
+	return u, nil
 }
 
 type user struct {
 	Email        string
 	Registration *acme.RegistrationResource
-	key          crypto.PrivateKey
+	Key          *rsa.PrivateKey
 }
 
 func (u *user) GetEmail() string {
@@ -163,5 +229,5 @@ func (u *user) GetRegistration() *acme.RegistrationResource {
 	return u.Registration
 }
 func (u *user) GetPrivateKey() crypto.PrivateKey {
-	return u.key
+	return u.Key
 }
