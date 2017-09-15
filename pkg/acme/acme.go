@@ -125,8 +125,11 @@ func IssueCerts(cfg *models.DNSConfig, providers map[string]providers.DNSService
 		u.Registration = reg
 		log.Println("REG", u.Registration)
 		//TODO: save to disk
+<<<<<<< HEAD
 		j, _ := json.Marshal(u)
 		fmt.Println(string(j))
+=======
+>>>>>>> e47866212d77e41c80f39fea14f08c14c3ec47a4
 	}
 
 	err = client.AgreeToTOS()
