@@ -52,6 +52,8 @@ func (d *differ) IncrementalDiff(existing []*models.RecordConfig) (unchanged, cr
 	toDelete = Changeset{}
 	modify = Changeset{}
 	desired := d.dc.Records
+	desired.Validate("IncrementalDiff Desired")
+	d.dc.Records.Validate("IncrementalDiff Actual")
 
 	//sort existing and desired by name
 	type key struct {
@@ -180,6 +182,8 @@ func (c Correlation) String() string {
 	if c.Desired == nil {
 		return fmt.Sprintf("DELETE %s %s %s", c.Existing.Type, c.Existing.NameFQDN, c.d.content(c.Existing))
 	}
+	c.Existing.Validate("Correlation-String-Existing")
+	c.Desired.Validate("Correlation-String-Desired")
 	return fmt.Sprintf("MODIFY %s %s: (%s) -> (%s)", c.Existing.Type, c.Existing.NameFQDN, c.d.content(c.Existing), c.d.content(c.Desired))
 }
 

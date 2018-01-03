@@ -238,6 +238,7 @@ func srv(name string, priority, weight, port uint16, target string) *rec {
 
 func txt(name, target string) *rec {
 	// FYI: This must match the algorithm in pkg/js/helpers.js TXT.
+	// FYI: This must match the algorithm in models/dns.go SetTxt()
 	r := makeRec(name, target, "TXT")
 	r.TxtStrings = []string{target}
 	return r
@@ -245,6 +246,7 @@ func txt(name, target string) *rec {
 
 func txtmulti(name string, target []string) *rec {
 	// FYI: This must match the algorithm in pkg/js/helpers.js TXT.
+	// FYI: This must match the algorithm in models/dns.go SetTxts()
 	r := makeRec(name, target[0], "TXT")
 	r.TxtStrings = target
 	return r

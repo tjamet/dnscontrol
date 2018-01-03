@@ -16,6 +16,7 @@ import (
 	"golang.org/x/net/idna"
 )
 
+// DefaultTTL is the TTL value used if none set in dnsconfig.js
 const DefaultTTL = uint32(300)
 
 type DNSConfig struct {
@@ -31,6 +32,13 @@ func (config *DNSConfig) FindDomain(query string) *DomainConfig {
 		}
 	}
 	return nil
+}
+
+// Validate panics if cross-checks fail.
+func (config *DNSConfig) Validate(m string) {
+	for _, b := range config.Domains {
+		b.Records.Validate(m)
+	}
 }
 
 type RegistrarConfig struct {
@@ -115,8 +123,14 @@ func (r *RecordConfig) String() (content string) {
 
 	content = fmt.Sprintf("%s %s %s %d", r.Type, r.NameFQDN, r.Target, r.TTL)
 	switch r.Type { // #rtype_variations
-	case "A", "AAAA", "CNAME", "NS", "PTR", "TXT":
+	case "A", "AAAA", "CNAME", "NS", "PTR":
 		// Nothing special.
+	case "TXT":
+		if len(r.TxtStrings) == 1 {
+			content = fmt.Sprintf("%s %s `%s` ttl=%d", r.Type, r.NameFQDN, r.Target, r.TTL)
+		} else {
+			content = fmt.Sprintf("%s %s `\"%s\"` ttl=%d", r.Type, r.NameFQDN, strings.Join(r.TxtStrings, `" "`), r.TTL)
+		}
 	case "MX":
 		content += fmt.Sprintf(" pref=%d", r.MxPreference)
 	case "SOA":
@@ -266,7 +280,61 @@ func atou32(s string) uint32 {
 	return uint32(i64)
 }
 
+// SetTxt sets the value of a TXT record to s.
+func (rc *RecordConfig) SetTxt(s string) {
+	rc.Target = s
+	rc.TxtStrings = []string{s}
+}
+
+// SetTxts sets the value of a TXT record to the list of strings s.
+func (rc *RecordConfig) SetTxts(s []string) {
+	rc.Target = s[0]
+	rc.TxtStrings = s
+}
+
+// SetTxtParse sets the value of TXT record if the list of strings is combined into one string.
+// `foo`  -> []string{"foo"}
+// `"foo"` -> []string{"foo"}
+// `"foo" "bar"` -> []string{"foo" "bar"}
+func (rc *RecordConfig) SetTxtParse(s string) {
+	if s == "" {
+		rc.Target = ""
+		rc.TxtStrings = []string{}
+	} else if s[0] == '"' && s[len(s)-1] != s[0] {
+		rc.SetTxt(s)
+	} else {
+		rc.SetTxts(strings.Split(rc.Target, `" "`))
+	}
+}
+
+// ValidateTxt panics if Txt record was not properly updated.  Used only for debugging.
+func (rc *RecordConfig) Validate(m string) {
+	if rc.Type == "TXT" {
+		rc.ValidateTxt(m)
+	}
+}
+
+// ValidateTxt panics if Txt record was not properly updated.  Used only for debugging.
+func (rc *RecordConfig) ValidateTxt(m string) {
+	if rc.Type != "TXT" {
+		panic(fmt.Sprintf("TxtCheck (%s) called on non-TXT record: %+v", m, *rc))
+	}
+	if len(rc.TxtStrings) == 0 {
+		panic(fmt.Sprintf("TxtCheck: (%s) TXT with empty TxtStrings: %+v", m, *rc))
+	} else if rc.Target != rc.TxtStrings[0] {
+		panic(fmt.Sprintf("TxtCheck: (%s) TXT with 0th item mismatched Target=%s TxtStrings=%v", m, rc.Target, rc.TxtStrings))
+	}
+}
+
 type Records []*RecordConfig
+
+func (recs Records) Validate(m string) {
+	for _, r := range recs {
+		if r.Type == "TXT" {
+			r.ValidateTxt(m)
+		}
+	}
+}
 
 func (r Records) Grouped() map[RecordKey]Records {
 	groups := map[RecordKey]Records{}

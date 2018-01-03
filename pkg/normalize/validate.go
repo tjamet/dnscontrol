@@ -277,6 +277,9 @@ func NormalizeAndValidateConfig(config *models.DNSConfig) (errs []error) {
 			ns.Name = dnsutil.AddOrigin(ns.Name, domain.Name)
 			ns.Name = strings.TrimRight(ns.Name, ".")
 		}
+
+		domain.Records.Validate("Normalize-Pre-Check")
+
 		// Normalize Records.
 		models.Downcase(domain.Records)
 		for _, rec := range domain.Records {
@@ -293,6 +296,7 @@ func NormalizeAndValidateConfig(config *models.DNSConfig) (errs []error) {
 			if errs2 := checkTargets(rec, domain.Name); errs2 != nil {
 				errs = append(errs, errs2...)
 			}
+			domain.Records.Validate("Normalize-Pre-Check")
 
 			// Canonicalize Targets.
 			if rec.Type == "CNAME" || rec.Type == "MX" || rec.Type == "NS" {

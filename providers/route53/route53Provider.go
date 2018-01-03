@@ -166,6 +166,9 @@ func (r *route53Provider) GetDomainCorrections(dc *models.DomainConfig) ([]*mode
 				TTL:            uint32(*set.TTL),
 				CombinedTarget: true,
 			}
+			if r.Type == "TXT" {
+				r.SetTxtParse(r.Target)
+			}
 			existingRecords = append(existingRecords, r)
 		}
 	}

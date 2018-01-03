@@ -24,7 +24,7 @@ func (n *nameDotCom) GetDomainCorrections(dc *models.DomainConfig) ([]*models.Co
 	if err != nil {
 		return nil, err
 	}
-	actual := make([]*models.RecordConfig, len(records))
+	actual := make(models.Records, len(records))
 	for i, r := range records {
 		actual[i] = r.toRecord()
 	}
@@ -39,6 +39,7 @@ func (n *nameDotCom) GetDomainCorrections(dc *models.DomainConfig) ([]*models.Co
 
 	// Normalize
 	models.Downcase(actual)
+	actual.Validate("NDC-GetDomainCorrections-Actual")
 
 	differ := diff.New(dc)
 	_, create, del, mod := differ.IncrementalDiff(actual)
@@ -110,8 +111,10 @@ func (r *nameComRecord) toRecord() *models.RecordConfig {
 		Original: r,
 	}
 	switch r.Type { // #rtype_variations
-	case "A", "AAAA", "ANAME", "CNAME", "NS", "TXT":
+	case "A", "AAAA", "ANAME", "CNAME", "NS":
 		// nothing additional.
+	case "TXT":
+		rc.SetTxt(r.Content)
 	case "MX":
 		rc.MxPreference = uint16(prio)
 	case "SRV":
