@@ -172,9 +172,11 @@ func (r *route53Provider) GetDomainCorrections(dc *models.DomainConfig) ([]*mode
 			existingRecords = append(existingRecords, r)
 		}
 	}
+	dc.Records.Validate("R53-GetDomainCorrections-PreMerge")
 	for _, want := range dc.Records {
 		want.MergeToTarget()
 	}
+	dc.Records.Validate("R53-GetDomainCorrections-PostMerge")
 
 	// Normalize
 	models.Downcase(existingRecords)

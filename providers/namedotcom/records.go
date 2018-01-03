@@ -39,6 +39,7 @@ func (n *nameDotCom) GetDomainCorrections(dc *models.DomainConfig) ([]*models.Co
 
 	// Normalize
 	models.Downcase(actual)
+	dc.Records.Validate("NDC-GetDomainCorrections-Desired")
 	actual.Validate("NDC-GetDomainCorrections-Actual")
 
 	differ := diff.New(dc)

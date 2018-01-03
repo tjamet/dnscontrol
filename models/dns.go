@@ -12,6 +12,7 @@ import (
 	"strings"
 
 	"github.com/StackExchange/dnscontrol/pkg/transform"
+	"github.com/StackExchange/dnscontrol/pkg/txt"
 	"github.com/miekg/dns"
 	"golang.org/x/net/idna"
 )
@@ -297,14 +298,9 @@ func (rc *RecordConfig) SetTxts(s []string) {
 // `"foo"` -> []string{"foo"}
 // `"foo" "bar"` -> []string{"foo" "bar"}
 func (rc *RecordConfig) SetTxtParse(s string) {
-	if s == "" {
-		rc.Target = ""
-		rc.TxtStrings = []string{}
-	} else if s[0] == '"' && s[len(s)-1] != s[0] {
-		rc.SetTxt(s)
-	} else {
-		rc.SetTxts(strings.Split(rc.Target, `" "`))
-	}
+	ss := txt.ParseQuoted(s)
+	rc.Target = ss[0]
+	rc.TxtStrings = ss
 }
 
 // ValidateTxt panics if Txt record was not properly updated.  Used only for debugging.
