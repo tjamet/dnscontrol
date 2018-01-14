@@ -13,8 +13,8 @@ import (
 
 	"strings"
 
-	gandidomain "github.com/prasmussen/gandi-api/domain"
 	gandirecord "github.com/prasmussen/gandi-api/domain/zone/record"
+	gandidomain "github.com/prasmussen/gandi-api/live_dns/domain"
 )
 
 /*
